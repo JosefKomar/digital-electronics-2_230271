@@ -14,7 +14,8 @@
 #define LED_GREEN PB5
 #define LED_RED PB0    // PB5 is AVR pin where green on-board LED 
                         // is connected
-#define SHORT_DELAY 250 // Delay in milliseconds
+#define SHORT_DELAY 250
+#define LONG_DELAY 500 // Delay in milliseconds
 #ifndef F_CPU
 # define F_CPU 16000000 // CPU frequency in Hz required for delay funcs
 #endif
@@ -51,16 +52,26 @@ int main(void)
     while (1)
     {
         // Change LED value
-        if (led_value == LOW)
-            led_value = HIGH;
-        else
-            led_value = LOW;
+      
+        led_value = HIGH;
+        digitalWrite(LED_GREEN, led_value);
+        _delay_ms(SHORT_DELAY);
+        led_value = LOW;
+        digitalWrite(LED_GREEN, led_value);
+        _delay_ms(SHORT_DELAY);
+        led_value = HIGH;
+        digitalWrite(LED_GREEN, led_value);
+        _delay_ms(LONG_DELAY);
+        led_value = LOW;
+        digitalWrite(LED_GREEN, led_value);
+        _delay_ms(LONG_DELAY);
+        _delay_ms(LONG_DELAY);
 
         // Pause several milliseconds
-        _delay_ms(SHORT_DELAY);
+        //_delay_ms(SHORT_DELAY);
         // Turn ON/OFF on-board LED
-        digitalWrite(LED_GREEN, led_value);
-        digitalWrite(LED_RED, led_value);
+        //digitalWrite(LED_GREEN, led_value);
+        //digitalWrite(LED_RED, led_value);
     }
 
     // Will never reach this
