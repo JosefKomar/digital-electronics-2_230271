@@ -13,7 +13,7 @@
    | Select | 3.182&nbsp;V | 651 | 640 | 280 |
    | none   | 5&nbsp;V | 1023 | 1023 | 3ff |
 
-| **Operation** | **Register(s)** | **Bit(s)** | **Description** |
+   | **Operation** | **Register(s)** | **Bit(s)** | **Description** |
    | :-- | :-: | :-: | :-- |
    | Voltage reference    | ADMUX | REFS1:0 | 00: ..., 01: AVcc voltage reference (5V), ... |
    | Input channel        | ADMUX | MUX3:0 | 0000: ADC0, 0001: ADC1, ... |
@@ -34,4 +34,4 @@ Consider an application for temperature measurement. Use analog temperature sens
 3. Draw two flowcharts for interrupt handler `TIMER1_OVF_vect` (which overflows every 1&nbsp;sec) and `ADC_vect`. The image can be drawn on a computer or by hand. Use clear descriptions of the individual steps of the algorithms.
 
    ![your figure](images/Temperature_timer1%20(1).jpg)
-   ![your figure](images/Temperature_ADCvec.jpg.jpg)
+   ![your figure](images/Temperature_ADCvec.jpg)
