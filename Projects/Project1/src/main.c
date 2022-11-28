@@ -1,33 +1,16 @@
 /***********************************************************************
  * 
- * Stopwatch by Timer/Counter2 on the Liquid Crystal Display (LCD)
- *
+ * Use Analog-to-digital conversion to read push buttons on LCD keypad
+ * shield and display it on LCD screen.
+ * 
  * ATmega328P (Arduino Uno), 16 MHz, PlatformIO
  *
- * Copyright (c) 2017 Tomas Fryza
+ * Copyright (c) 2018 Tomas Fryza
  * Dept. of Radio Electronics, Brno University of Technology, Czechia
  * This work is licensed under the terms of the MIT license.
  * 
- * Components:
- *   16x2 character LCD with parallel interface
- *     VSS  - GND (Power supply ground)
- *     VDD  - +5V (Positive power supply)
- *     Vo   - (Contrast)
- *     RS   - PB0 (Register Select: High for Data transfer, Low for Instruction transfer)
- *     RW   - GND (Read/Write signal: High for Read mode, Low for Write mode)
- *     E    - PB1 (Read/Write Enable: High for Read, falling edge writes data to LCD)
- *     D3:0 - NC (Data bits 3..0, Not Connected)
- *     D4   - PD4 (Data bit 4)
- *     D5   - PD5 (Data bit 5)
- *     D6   - PD6 (Data bit 6)
- *     D7   - PD7 (Data bit 7)
- *     A+K  - Back-light enabled/disabled by PB2
- * 
  **********************************************************************/
 
-#define OutputCLK PD2
-#define OutputDT PD3
-#define OutputSW PB2
 
 /* Includes ----------------------------------------------------------*/
 #include <avr/io.h>         // AVR device-specific IO definitions
@@ -36,99 +19,248 @@
 #include "timer.h"          // Timer library for AVR-GCC
 #include <lcd.h>            // Peter Fleury's LCD library
 #include <stdlib.h>         // C library. Needed for number conversions
+#include <uart.h>
 
+// LEDS
+#define LED1 PB2
+#define LED2 PB3
+#define LED3 PB4
+#define LED4 PB5
+#define LED5 PC3
+#define LED6 PC4
+#define LED7 PC5
+
+// ENCODER
+#define OutputCLK PD1
+#define OutputDT PD2
+#define OutputSW PD3
+
+// JOYSTICK
+#define OutputSWJ PC2
+// X-AXIS PC0
+// Y-AXIS PC1
+
+static int8_t counter = 0; 
+static uint8_t aState;
+static uint8_t aLastState;
+static uint8_t button = 1;
 
 /* Function definitions ----------------------------------------------*/
 /**********************************************************************
  * Function: Main function where the program execution begins
- * Purpose:  Update stopwatch value on LCD screen when 8-bit 
- *           Timer/Counter2 overflows.
+ * Purpose:  Use Timer/Counter1 and start ADC conversion every 100 ms.
+ *           When AD conversion ends, send converted value to LCD screen.
  * Returns:  none
  **********************************************************************/
 int main(void)
 {
-    static int8_t counter = 0; 
-    static int8_t aState;
-    static int8_t aLastState;
-    static uint8_t RST = 1;
-    char string[2];
-    
-  
-    
     GPIO_mode_input_nopull(&DDRD,OutputCLK);
     GPIO_mode_input_nopull(&DDRD,OutputDT);
-    GPIO_mode_input_pullup(&DDRB,OutputSW);
+    GPIO_mode_input_pullup(&DDRD,OutputSW);
 
     aLastState = GPIO_read(&PIND,OutputCLK);
 
-    
-
-    
     // Initialize display
-    lcd_init(LCD_DISP_ON_CURSOR);
+    lcd_init(LCD_DISP_ON);
 
-    // Put string(s) on LCD screen
-    //lcd_gotoxy(1, 0);
-    //lcd_puts("00:00.0");
+    GPIO_mode_output(&DDRB,LED1);
+    GPIO_mode_output(&DDRB,LED2);
+    GPIO_mode_output(&DDRB,LED3);
+    GPIO_mode_output(&DDRB,LED4);
+    GPIO_mode_output(&DDRC,LED5);
+    GPIO_mode_output(&DDRC,LED6);
+    GPIO_mode_output(&DDRC,LED7);
 
-    lcd_gotoxy(1, 1);
-    //lcd_puts("jarek je DOG");
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Configure Analog-to-Digital Convertion unit
+    // Select ADC voltage reference to "AVcc with external capacitor at AREF pin"
+    ADMUX = ADMUX | (1<<REFS0);
+    // Select input channel ADC0 & ADC1 (voltage divider pin)
+    ADMUX = ADMUX & ~( 1<<MUX3 | 1<<MUX2 | 1<<MUX0 | 1<<MUX1);
+    ADMUX &= ~((1<<MUX3 | 1<<MUX2 | 1<<MUX1)); ADMUX |= (1<<MUX0);
+    // Enable ADC module
+    ADCSRA |= (1<<ADEN);
+    // Enable conversion complete interrupt
+    ADCSRA |= (1<<ADIE);
+    // Set clock prescaler to 128
+    ADCSRA |= (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
 
-    // Configuration of 8-bit Timer/Counter2 for Stopwatch update
-    // Set the overflow prescaler to 16 ms and enable interrupt
-    TIM2_overflow_16ms();
+    // Configure 16-bit Timer/Counter1 to start ADC conversion
+    // Set prescaler to 33 ms and enable overflow interrupt
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    TIM1_overflow_33ms();
+    TIM1_overflow_interrupt_enable();
+
+    TIM2_overflow_2ms();
     TIM2_overflow_interrupt_enable();
-
     // Enables interrupts by setting the global interrupt mask
     sei();
 
     // Infinite loop
     while (1)
     {
-        
 
-
-        aState = GPIO_read(&PIND,OutputCLK); // Reads the "current" state of the outputA
-        // If the previous and the current state of the outputA are different, that means a Pulse has occured
-        if (aState != aLastState){
-        // If the outputB state is different to the outputA state, that means the encoder is rotating clockwise
-        if (GPIO_read(&PIND,OutputDT) != aState) {
-        counter ++;
-        lcd_gotoxy(1, 1);
-        lcd_puts("    ");
-        } else {
-        counter --;
-        lcd_gotoxy(1, 1);
-        lcd_puts("    ");
-        }
-        itoa(counter, string, 10);
-        lcd_gotoxy(1, 1);
-        lcd_puts(string);
-
-        
-
-        }
-        aLastState = aState;
-        RST = GPIO_read(&PINB,OutputSW);
-        if (RST == 0){
-            counter = 0;
-        }
     }
-    // Will never reach this
+
     return 0;
 }
+
+
+ISR(TIMER2_OVF_vect)
+{
+    char string[4];
+    aState = GPIO_read(&PIND,OutputCLK);
+    lcd_gotoxy(0, 0);
+    lcd_puts("Counter:");
+
+    if (aState != aLastState && aState == 1){
+
+        if (GPIO_read(&PIND,OutputDT) != aState) {
+        counter ++;
+        }
+        
+        else {
+        counter --;
+        }
+
+        itoa(counter, string, 10);
+        lcd_gotoxy(8, 0);
+        lcd_puts("      ");
+        lcd_gotoxy(8, 0);
+        lcd_puts(string);
+    }
+
+aLastState = aState;
+
+button = GPIO_read(&PIND,OutputSW);
+
+    if (button == 0){
+
+        counter = 0;
+
+        itoa(counter, string, 10);
+        lcd_gotoxy(8, 0);
+        lcd_puts("      ");
+        lcd_gotoxy(8, 0);
+        lcd_puts(string);
+    }
+
+}
+
 
 
 
 /* Interrupt service routines ----------------------------------------*/
 /**********************************************************************
- * Function: Timer/Counter2 overflow interrupt
- * Purpose:  Update the stopwatch on LCD screen every sixth overflow,
- *           ie approximately every 100 ms (6 x 16 ms = 100 ms).
+ * Function: Timer/Counter1 overflow interrupt
+ * Purpose:  Use single conversion mode and start conversion every 100 ms.
  **********************************************************************/
-ISR(TIMER2_OVF_vect)
+
+ISR(TIMER1_OVF_vect)
 {
+    // Start ADC conversion
+  static int8_t nooverflow = 0;
+  nooverflow++;
+  if(nooverflow > 6)
+  {
+  nooverflow = 0;
+  ADCSRA |= (1<<ADSC);
+  }
+  
+}
+
+/**********************************************************************
+ * Function: ADC complete interrupt
+ * Purpose:  Display converted value on LCD screen.
+ **********************************************************************/
+ISR(ADC_vect)
+{
+  uint16_t value;
+  char string[4];  // String for converted numbers by itoa()
+
+    // Read converted value
+    // Note that, register pair ADCH and ADCL can be read as a 16-bit value ADC
+  value = ADC;
+    // Convert "value" to "string" and display it
+
+  itoa(value, string, 10);
+  lcd_gotoxy(0,1);
+  lcd_puts("    ");
+  lcd_gotoxy(0,1);
+  lcd_puts(string);
+
+  GPIO_write_high(&PORTB,LED1);
+  GPIO_write_high(&PORTB,LED2);
+  GPIO_write_high(&PORTB,LED3);
+  GPIO_write_high(&PORTB,LED4);
+  GPIO_write_high(&PORTC,LED5);
+  GPIO_write_high(&PORTC,LED6);
+  GPIO_write_high(&PORTC,LED7);
+
+  if(value > 800)
+  {
+    GPIO_write_low(&PORTC,LED7);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_7");
     
-    
-    // Else do nothing and exit the ISR
+  }
+  else if (value > 700)
+  {
+    GPIO_write_low(&PORTC,LED6);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_6");
+  }
+  else if (value > 600)
+  {
+    GPIO_write_low(&PORTC,LED5);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_5");
+  }
+  else if (value > 500)
+  {
+    GPIO_write_low(&PORTB,LED4);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_4");
+  }
+  else if (value > 400)
+  {
+    GPIO_write_low(&PORTB,LED3);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_3");
+  }
+  else if (value > 300)
+  {
+    GPIO_write_low(&PORTB,LED2);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_2");
+  }
+  else if (value > 200)
+  {
+    GPIO_write_low(&PORTB,LED1);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("LED_1");
+  }
+  else if (value > 100)
+  {
+    GPIO_write_low(&PORTB,LED1);
+    lcd_gotoxy(8, 1);
+    lcd_puts("      ");
+    lcd_gotoxy(8, 1);
+    lcd_puts("OFF");
+  }
+  
 }
