@@ -27,10 +27,11 @@
 #define LED3 PB4
 #define LED4 PB5
 #define LED5 PC3
-
+#define LED6 PC4
+#define LED7 PC5
 
 // ENCODER
-#define OutputCLK PC5
+#define OutputCLK PD1
 #define OutputDT PD2
 #define OutputSW PD3
 
@@ -43,7 +44,6 @@ static int8_t counter = 0;
 static uint8_t aState;
 static uint8_t aLastState;
 static uint8_t button = 1;
-static uint8_t buttonJOY = 1;
 static uint8_t internalCounter = 0;
 
 /* Function definitions ----------------------------------------------*/
@@ -55,12 +55,11 @@ static uint8_t internalCounter = 0;
  **********************************************************************/
 int main(void)
 {
-    GPIO_mode_input_nopull(&DDRC,OutputCLK);
+    GPIO_mode_input_nopull(&DDRD,OutputCLK);
     GPIO_mode_input_nopull(&DDRD,OutputDT);
     GPIO_mode_input_pullup(&DDRD,OutputSW);
-    GPIO_mode_input_pullup(&DDRC,OutputSWJ);
 
-    aLastState = GPIO_read(&PINC,OutputCLK);
+    aLastState = GPIO_read(&PIND,OutputCLK);
 
     // Initialize display
     lcd_init(LCD_DISP_ON);
@@ -70,7 +69,8 @@ int main(void)
     GPIO_mode_output(&DDRB,LED3);
     GPIO_mode_output(&DDRB,LED4);
     GPIO_mode_output(&DDRC,LED5);
-    
+    GPIO_mode_output(&DDRC,LED6);
+    GPIO_mode_output(&DDRC,LED7);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Configure Analog-to-Digital Convertion unit
@@ -84,10 +84,8 @@ int main(void)
     ADCSRA |= (1<<ADPS2) | (1<<ADPS1) | (1<<ADPS0);
     // Configure 16-bit Timer/Counter1 to start ADC conversion
     // Set prescaler to 33 ms and enable overflow interrupt
-    TIM1_overflow_4ms();
+    TIM1_overflow_33ms();
     TIM1_overflow_interrupt_enable();
-    TIM0_overflow_16ms();
-    TIM0_overflow_interrupt_enable();
   ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     // Enables interrupts by setting the global interrupt mask
@@ -103,25 +101,22 @@ int main(void)
 }
 
 
-ISR(TIMER0_OVF_vect)
+ISR(TIMER1_OVF_vect)
 {
   char string[4];
-  aState = GPIO_read(&PINC,OutputCLK);
+  aState = GPIO_read(&PIND,OutputCLK);
+  // Start ADC conversion
   static int8_t nooverflow = 0;
   nooverflow++;
-  if(nooverflow > 500)
+  if(nooverflow > 3)
   {
     nooverflow = 0;
-    // Start ADC conversion
-    //ADCSRA |= (1<<ADSC);
+    ADCSRA |= (1<<ADSC);
+  //    ADCSRA &=~(1<<ADSC);
   }
-  
-
 
   lcd_gotoxy(0, 0);
   lcd_puts("Cntr:");
-
-  itoa(counter, string, 10);
 
   if (aState != aLastState && aState == 1){
 
@@ -145,9 +140,9 @@ ISR(TIMER0_OVF_vect)
       lcd_puts(string);
   }
 
-  aLastState = aState;
+    aLastState = aState;
 
-  button = GPIO_read(&PIND,OutputSW);
+    button = GPIO_read(&PIND,OutputSW);
 
     if (button == 0){
 
@@ -162,28 +157,16 @@ ISR(TIMER0_OVF_vect)
 
 }
 
-ISR(TIMER1_OVF_vect)
-{
-  ADCSRA |= (1<<ADSC);
-}
-
 
 ISR(ADC_vect)
 {
   char charX[4];
   char charY[4];
+  internalCounter++;
   uint16_t valueX;
   uint16_t valueY;
   uint8_t channel = 0;
 
-
-  static int8_t nooverflow = 0;
-  nooverflow++;
-  if(nooverflow > 3)
-  {
-    nooverflow = 0;
-    internalCounter++;
-  }
   
   /* address shifting ADMUX -----------------------------------------*/
 
@@ -197,7 +180,7 @@ ISR(ADC_vect)
     lcd_gotoxy(0,1);
     lcd_puts("       ");
     lcd_gotoxy(0,1);
-    lcd_puts("X:");
+    lcd_puts("Y:");
     lcd_gotoxy(2,1);
     lcd_puts(charX);
 
@@ -210,11 +193,11 @@ ISR(ADC_vect)
     valueY = ADC;
     
     itoa(valueY, charY, 10);
-    lcd_gotoxy(7,1);
+    lcd_gotoxy(6,1);
     lcd_puts("       ");
-    lcd_gotoxy(7,1);
-    lcd_puts("Y:");
-    lcd_gotoxy(9,1);
+    lcd_gotoxy(6,1);
+    lcd_puts("X:");
+    lcd_gotoxy(8,1);
     lcd_puts(charY);
 
     channel = 0;
@@ -226,7 +209,8 @@ ISR(ADC_vect)
   GPIO_write_high(&PORTB,LED3);
   GPIO_write_high(&PORTB,LED4);
   GPIO_write_high(&PORTC,LED5);
-  
+  GPIO_write_high(&PORTC,LED6);
+  GPIO_write_high(&PORTC,LED7);
   
   /* Blinking LEDS and fucntions -----------------------------------------*/
   if(valueX > 800)
@@ -234,32 +218,68 @@ ISR(ADC_vect)
     for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
         if(internalCounter%(11-i) == 0){
-          GPIO_write_low(&PORTC,LED5);
+          GPIO_write_low(&PORTC,LED7);
         }
         else if(i == 0){
-         GPIO_write_low(&PORTC,LED5);
+          GPIO_write_low(&PORTC,LED7);
         } 
     }
     }    
       lcd_gotoxy(11, 0);
       lcd_puts("      ");
       lcd_gotoxy(11, 0);
-      lcd_puts("LED_5");
+      lcd_puts("LED_7");
       
     }
 
-  else if (valueX > 600)
+  else if (valueX > 700)
   {
     for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
         if(internalCounter%(11-i) == 0){
-          GPIO_write_low(&PORTB,LED4);
+          GPIO_write_low(&PORTC,LED6);
         }
         else if(i == 0){
-          GPIO_write_low(&PORTB,LED4);
+          GPIO_write_low(&PORTC,LED6);
         } 
       }
       }
+    lcd_gotoxy(11, 0);
+    lcd_puts("      ");
+    lcd_gotoxy(11, 0);
+    lcd_puts("LED_6");
+  }
+
+  else if (valueX > 600)
+  {
+    for(uint8_t i = 0; i<11; i++){ 
+      if(abs(counter)==i){
+        if(internalCounter%(11-i) == 0){
+            GPIO_write_low(&PORTC,LED5);
+        }
+        else if(i == 0){
+          GPIO_write_low(&PORTC,LED5);
+        } 
+    }
+    }
+    lcd_gotoxy(11, 0);
+    lcd_puts("      ");
+    lcd_gotoxy(11, 0);
+    lcd_puts("LED_5");
+  }
+
+  else if (valueX > 500)
+  {
+    for(uint8_t i = 0; i<11; i++){  
+      if(abs(counter)==i){
+        if(internalCounter%(11-i) == 0){
+          GPIO_write_low(&PORTB,LED4);
+        } 
+        else if(i == 0){
+          GPIO_write_low(&PORTB,LED4);
+        }
+    }
+    }
     lcd_gotoxy(11, 0);
     lcd_puts("      ");
     lcd_gotoxy(11, 0);
@@ -268,7 +288,7 @@ ISR(ADC_vect)
 
   else if (valueX > 400)
   {
-    for(uint8_t i = 0; i<11; i++){ 
+    for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
         if(internalCounter%(11-i) == 0){
             GPIO_write_low(&PORTB,LED3);
@@ -284,16 +304,16 @@ ISR(ADC_vect)
     lcd_puts("LED_3");
   }
 
-  else if (valueX > 200)
+  else if (valueX > 300)
   {
-    for(uint8_t i = 0; i<11; i++){  
+    for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
         if(internalCounter%(11-i) == 0){
-          GPIO_write_low(&PORTB,LED2);
-        } 
+            GPIO_write_low(&PORTB,LED2);
+        }
         else if(i == 0){
           GPIO_write_low(&PORTB,LED2);
-        }
+        } 
     }
     }
     lcd_gotoxy(11, 0);
@@ -301,8 +321,7 @@ ISR(ADC_vect)
     lcd_gotoxy(11, 0);
     lcd_puts("LED_2");
   }
-
-  else if (valueX >= 0)
+  else if (valueX > 200)
   {
     for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
@@ -311,7 +330,7 @@ ISR(ADC_vect)
         }
         else if(i == 0){
           GPIO_write_low(&PORTB,LED1);
-        } 
+        } // 1sec pause
     }
     }
     lcd_gotoxy(11, 0);
@@ -319,7 +338,7 @@ ISR(ADC_vect)
     lcd_gotoxy(11, 0);
     lcd_puts("LED_1");
   }
-/*
+
   else if (valueX > 0)
   {
     GPIO_write_low(&PORTB,LED1);
@@ -327,19 +346,21 @@ ISR(ADC_vect)
     lcd_puts("      ");
     lcd_gotoxy(11, 0);
     lcd_puts("OFF");
-  }*/
+  }
   
   if(valueY < 80)
   {
     for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
         if(internalCounter%(11-i) == 0){
-          
+          GPIO_write_low(&PORTC,LED7);
+          GPIO_write_low(&PORTC,LED6);
           GPIO_write_low(&PORTC,LED5);
           GPIO_write_low(&PORTB,LED4);
         }
         else if(i == 0){
-          
+          GPIO_write_low(&PORTC,LED7);
+          GPIO_write_low(&PORTC,LED6);
           GPIO_write_low(&PORTC,LED5);
           GPIO_write_low(&PORTB,LED4);
         }
@@ -352,12 +373,14 @@ ISR(ADC_vect)
     for(uint8_t i = 0; i<11; i++){
       if(abs(counter)==i){
         if(internalCounter%(11-i) == 0){
-         
+          GPIO_write_low(&PORTB,LED4);
+          GPIO_write_low(&PORTB,LED3);
           GPIO_write_low(&PORTB,LED2);
           GPIO_write_low(&PORTB,LED1);
         }
         else if(i == 0){
-          
+          GPIO_write_low(&PORTB,LED4);
+          GPIO_write_low(&PORTB,LED3);
           GPIO_write_low(&PORTB,LED2);
           GPIO_write_low(&PORTB,LED1);
         }
@@ -365,31 +388,7 @@ ISR(ADC_vect)
     }
     }       
       
-  buttonJOY = GPIO_read(&PINC,OutputSWJ);
-
-    if (buttonJOY == 0){
-      for(uint8_t i = 0; i<11; i++){
-        if(abs(counter)==i){
-          if(internalCounter%(11-i) == 0){
-            
-            GPIO_write_low(&PORTC,LED5);
-            GPIO_write_low(&PORTB,LED4);
-            GPIO_write_low(&PORTB,LED3);
-            GPIO_write_low(&PORTB,LED2);
-            GPIO_write_low(&PORTB,LED1);
-          }
-          else if(i == 0){
-            
-            GPIO_write_low(&PORTC,LED5);
-            GPIO_write_low(&PORTB,LED4);
-            GPIO_write_low(&PORTB,LED3);
-            GPIO_write_low(&PORTB,LED2);
-            GPIO_write_low(&PORTB,LED1);
-          }
-        } // 1sec pause
-      }
-
-    }    
+      
     
 
 
